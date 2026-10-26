@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from dataclasses import asdict
+from email.utils import getaddresses
 from typing import Any
 
 import pycountry
@@ -13,7 +14,11 @@ from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
 
-from adapters.outbound.llm.schemas import ExtractedBillingDocument, ExtractionEnvelope
+from adapters.outbound.llm.schemas import (
+    ExtractedBillingDocument,
+    ExtractedParties,
+    ExtractionEnvelope,
+)
 from application.dto.documents import ParsedDocument
 from application.errors import ApplicationError
 from domain.billing.entities import (
@@ -281,12 +286,16 @@ def _to_domain(
     )
     source_materials = _source_materials(source_documents)
     raw_text = "\n".join(material.text for material in source_materials if material.text)
+    parties = _validated_parties(extracted.parties, source_documents)
+    parties_changed = parties != TransactionParties(**extracted.parties.model_dump())
     return BillingDocument(
         document_info=DocumentInfo(**extracted.document_info.model_dump()),
-        parties=TransactionParties(**extracted.parties.model_dump()),
+        parties=parties,
         charges=charges,
         charge_direction=(
-            ChargeDirection(extracted.charge_direction) if extracted.charge_direction else None
+            ChargeDirection(extracted.charge_direction)
+            if extracted.charge_direction and not parties_changed
+            else None
         ),
         subtotal=extracted.subtotal,
         tax=extracted.tax,
@@ -295,6 +304,50 @@ def _to_domain(
         reasoning=tuple(extracted.reasoning),
         source_materials=source_materials,
     )
+
+
+def _validated_parties(
+    extracted: ExtractedParties,
+    source_documents: tuple[ParsedDocument, ...],
+) -> TransactionParties:
+    """Reject parties copied only from email transport headers."""
+
+    header_values: set[str] = set()
+    business_fragments: list[str] = []
+
+    def visit(document: ParsedDocument) -> None:
+        if document.raw_text:
+            business_fragments.append(document.raw_text)
+        business_fragments.extend(block.text for block in document.text_blocks)
+        business_fragments.extend(
+            " ".join(str(value) for value in row if value is not None)
+            for table in document.tables
+            for row in table.rows
+        )
+        if document.source_type == "EML":
+            headers = [str(document.metadata.get(key, "")) for key in ("from", "to")]
+            header_values.update(value.strip().casefold() for value in headers if value.strip())
+            for display_name, address in getaddresses(headers):
+                if display_name.strip():
+                    header_values.add(display_name.strip().casefold())
+                if address.strip():
+                    header_values.add(address.strip().casefold())
+        for child in document.children:
+            visit(child)
+
+    for source in source_documents:
+        visit(source)
+    business_text = "\n".join(business_fragments).casefold()
+
+    def keep(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().casefold()
+        if normalized in header_values and normalized not in business_text:
+            return None
+        return value
+
+    return TransactionParties(issuer=keep(extracted.issuer), recipient=keep(extracted.recipient))
 
 
 def _source_materials(

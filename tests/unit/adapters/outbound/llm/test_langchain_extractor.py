@@ -294,3 +294,31 @@ def test_extractor_keeps_validation_corpus_separate_by_source_name() -> None:
         ("0", "invoice.pdf", "THC USD 10"),
         ("1", "other.pdf", "Documentation Fee USD 20"),
     ]
+
+
+def test_email_transport_headers_are_not_billing_parties_without_body_evidence() -> None:
+    response = EMAIL_CHARGE_RESPONSE.replace(
+        '"parties": {"issuer": null, "recipient": null}',
+        '"parties": {"issuer": "sender@example.test", "recipient": "receiver@example.test"}',
+    ).replace(
+        '"reasoning": ["Email body contains an assigned charge and amount"]',
+        '"charge_direction": "ISSUER_CHARGES_RECIPIENT", '
+        '"reasoning": ["Email headers identify the parties"]',
+    )
+    extractor = LangChainBillingExtractor(FakeListChatModel(responses=[response]))
+    document = ParsedDocument(
+        "mail.eml",
+        "EML",
+        raw_text="SHA pay TAR：H/C $50",
+        metadata={
+            "from": "sender@example.test",
+            "to": "receiver@example.test",
+            "subject": "Pre-alert",
+        },
+    )
+
+    result = extractor.extract((document,))
+
+    assert result[0].parties.issuer is None
+    assert result[0].parties.recipient is None
+    assert result[0].charge_direction is None
