@@ -7,6 +7,8 @@ from adapters.outbound.ocr.http_client import OcrServiceError
 from application.dto.documents import InputFile
 
 APP_PATH = Path(__file__).parents[3] / "demo" / "app.py"
+EXISTING_BILL_PATH = APP_PATH.parent / "scenarios" / "existing-bills-update.json"
+MB = 1024 * 1024
 
 
 @patch("bootstrap.build_application")
@@ -93,3 +95,39 @@ def test_demo_hides_unexpected_error_details(build_application: object) -> None:
     assert not app.exception
     assert "发生了意外错误" in app.error[0].value
     assert "internal URL" not in app.error[0].value
+
+
+@patch("bootstrap.build_application")
+def test_demo_rejects_oversized_existing_bill_json(build_application: object) -> None:
+    application = build_application.return_value  # type: ignore[attr-defined]
+    application.process.return_value = ()
+    payload = EXISTING_BILL_PATH.read_bytes()
+    oversized_payload = payload + b" " * (10 * MB + 1 - len(payload))
+
+    app = AppTest.from_file(APP_PATH).run(timeout=30)
+    app.file_uploader[0].upload("bill.xlsx", b"workbook")
+    app.file_uploader[1].upload("existing.json", oversized_payload, "application/json")
+    app.button[0].click().run(timeout=30)
+
+    assert not app.exception
+    assert "10 MB" in app.error[0].value
+    application.process.assert_not_called()
+
+
+@patch("bootstrap.build_application")
+def test_demo_counts_existing_bill_json_toward_request_limit(build_application: object) -> None:
+    application = build_application.return_value  # type: ignore[attr-defined]
+    application.process.return_value = ()
+    payload = EXISTING_BILL_PATH.read_bytes()
+    ten_mb_payload = payload + b" " * (10 * MB - len(payload))
+
+    app = AppTest.from_file(APP_PATH).run(timeout=30)
+    app.file_uploader[0].upload("bill-a.xlsx", b"a" * (8 * MB))
+    app.file_uploader[0].upload("bill-b.xlsx", b"b" * (8 * MB))
+    app.file_uploader[1].upload("existing.json", ten_mb_payload, "application/json")
+    app.button[0].click().run(timeout=30)
+
+    assert not app.exception
+    assert "合计" in app.error[0].value
+    assert "25 MB" in app.error[0].value
+    application.process.assert_not_called()

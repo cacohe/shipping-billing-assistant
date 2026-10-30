@@ -6,6 +6,19 @@
 
 当前已完成核心业务闭环、LangChain + LiteLLM 接入、可配置 OCR 接入、七牛临时文件桥接、Streamlit 演示页与 GitHub Actions CI。
 
+## 系统架构
+
+```mermaid
+flowchart LR
+    A[EML / PDF / 图片 / Excel / Word] --> B[格式解析与 OCR]
+    B --> C[LangChain + LiteLLM 结构化抽取]
+    C --> D[原文证据与财务规则校验]
+    D --> E[已有账单匹配]
+    E --> F[CREATE / UPDATE / NO_CHANGE / PENDING_REVIEW]
+```
+
+语言模型只负责语义抽取；证据归属、标准化、金额校验、账单匹配和操作决策继续由确定性代码完成。模型服务通过 LiteLLM 配置，可按部署环境替换兼容的模型端点，不影响领域规则。
+
 ## 两分钟理解处理流程
 
 ```text
@@ -63,6 +76,28 @@ Copy-Item .env.example .env
 `.env` 已被 Git 忽略，应用启动时自动读取；操作系统已设置的同名环境变量优先。模型名遵循 LiteLLM `provider/model` 约定，使用兼容端点时可设置 `LITELLM_API_BASE`；`LITELLM_TIMEOUT_SECONDS` 默认 120 秒，避免模型调用无限等待。
 
 浏览器中只需在同一控件上传业务文件，填写当前记账主体，并仅在判断更新/无变化时上传已有账单 JSON。PDF、图片和 EML 内 OCR 附件由后端自动临时托管，用户无需填写 URL。
+
+## 增强演示界面
+
+Streamlit 页面除最终 JSON 外，还会展示费用项数量、自动决策数量、待复核数量、涉及币种、逐费用项结果表以及可展开的证据与决策轨迹。侧栏提供完全合成的新建、更新和待复核样本，可直接下载后上传演示。
+
+为控制公开服务资源，单次请求最多上传 8 个文件，单文件不超过 10 MB，所有文件合计不超过 25 MB。超过限制的请求会在调用 OCR 或模型服务之前被拒绝。
+
+## Docker 运行
+
+构建镜像：
+
+```bash
+docker build -t shipping-billing-assistant .
+```
+
+使用本地 `.env` 启动服务：
+
+```bash
+docker run --rm -p 8501:8501 --env-file .env shipping-billing-assistant
+```
+
+容器监听 `8501` 端口，并通过 Streamlit 的 `/_stcore/health` 路径提供健康检查。公开部署时应只使用服务端注入的凭据，为外部 OCR、模型和临时存储设置严格配额，不在镜像、仓库或浏览器端暴露密钥；公开示例应继续使用仓库提供的合成材料。
 
 `OCR_ENDPOINT` 需要指向与当前适配器协议兼容的 HTTP 服务，并非任意 OCR 产品地址。请求体固定为：
 

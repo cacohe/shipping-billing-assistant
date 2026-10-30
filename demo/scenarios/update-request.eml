@@ -1,0 +1,9 @@
+From: operations@northstar-logistics.example.test
+To: billing@harborline-carrier.example.test
+Subject: Correction for invoice INV-DEMO-1001
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Please update invoice INV-DEMO-1001.
+Change the Ocean Freight amount to USD 200.00.
+The charge remains COLLECT and is billed by Harborline Carrier Demo Co. to Northstar Logistics Demo Ltd.
