@@ -1,5 +1,12 @@
+import json
+from email import policy
+from email.parser import BytesParser
+from email.utils import getaddresses
+from pathlib import Path
+
 import pytest
 
+from application.dto.input_schema import ExistingBillInput
 from application.errors import UserInputError
 from application.presentation import (
     MAX_FILE_COUNT,
@@ -132,3 +139,29 @@ def test_build_result_rows_formats_amounts_and_missing_values() -> None:
         "付款方式": "—",
         "记账方向": "—",
     }
+
+
+PROJECT_ROOT = Path(__file__).parents[3]
+
+
+def test_update_scenario_contains_a_valid_existing_bill() -> None:
+    scenario_path = PROJECT_ROOT / "demo" / "scenarios" / "existing-bills-update.json"
+    payload = json.loads(scenario_path.read_text(encoding="utf-8"))
+
+    bills = tuple(ExistingBillInput.model_validate(item).to_domain() for item in payload)
+
+    assert len(bills) == 1
+    assert bills[0].bill_id == "BILL-DEMO-1001-OF"
+    assert str(bills[0].charge.amount) == "180.0"
+
+
+@pytest.mark.parametrize("filename", ["update-request.eml", "pending-review.eml"])
+def test_email_scenarios_use_reserved_synthetic_addresses(filename: str) -> None:
+    scenario_path = PROJECT_ROOT / "demo" / "scenarios" / filename
+
+    message = BytesParser(policy=policy.default).parsebytes(scenario_path.read_bytes())
+
+    addresses = getaddresses([str(message["From"]), str(message["To"])])
+
+    assert len(addresses) == 2
+    assert all(address.rpartition("@")[2].endswith("example.test") for _, address in addresses)

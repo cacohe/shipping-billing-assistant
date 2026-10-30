@@ -1,0 +1,24 @@
+[
+  {
+    "bill_id": "BILL-DEMO-1001-OF",
+    "document_info": {
+      "document_type": "Invoice",
+      "reference_no": "INV-DEMO-1001",
+      "document_date": "2026-10-26"
+    },
+    "transaction_party": {
+      "issuer": "Harborline Carrier Demo Co.",
+      "recipient": "Northstar Logistics Demo Ltd."
+    },
+    "charge_details": {
+      "charge_item": "Ocean Freight",
+      "amount": 180.0,
+      "currency": "USD",
+      "payment_term": "CC"
+    },
+    "financial_attributes": {
+      "accounting_entity": "Northstar Logistics Demo Ltd.",
+      "posting_type": "AP"
+    }
+  }
+]

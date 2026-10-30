@@ -1,0 +1,9 @@
+From: documentation@example.test
+To: operations@example.test
+Subject: Handling charge notice
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Handling charge: USD 20.00.
+Reference: NOTICE-DEMO-4001.
+The message does not identify who issued the bill or who must pay it.
