@@ -11,6 +11,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY demo ./demo
+COPY .streamlit/config.toml ./.streamlit/config.toml
 COPY tests/fixtures/documents ./tests/fixtures/documents
 RUN uv sync --frozen --extra demo --no-dev
 

@@ -23,6 +23,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class UploadedJson(Protocol):
+    name: str
+
     def getvalue(self) -> bytes: ...
 
 
@@ -133,7 +135,8 @@ if submitted:
         progress.write(f"{event.stage.value} — {event.message}")
 
     try:
-        validate_uploads(files or ())
+        uploads_to_validate = [*(files or ()), *([existing_file] if existing_file else [])]
+        validate_uploads(uploads_to_validate)
         existing = tuple(item.to_domain() for item in load_existing_bills(existing_file))
         inputs = tuple(
             InputFile(
